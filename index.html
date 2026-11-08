@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Flappy Bird</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+html,body{margin:0;height:100%;background:#1b2a3a;font-family:"Trebuchet MS",system-ui,sans-serif;overflow:hidden}
+#wrap{position:relative;height:100%;aspect-ratio:2/3;max-width:100%;margin:0 auto}
+canvas{position:absolute;inset:0;width:100%;height:100%;image-rendering:auto}
+.ov{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(10,30,50,.45);color:#fff;text-align:center}
+.ov.show{display:flex}
+h1{margin:0;font-size:min(13vw,56px);color:#ffeb3b;text-shadow:0 4px 0 #e65100,0 8px 12px rgba(0,0,0,.4);letter-spacing:2px}
+h2{margin:0;font-size:34px;text-shadow:0 3px 0 rgba(0,0,0,.4)}
+.btn{font:inherit;font-weight:700;font-size:22px;color:#fff;background:#ff7043;border:0;border-bottom:5px solid #bf360c;border-radius:14px;padding:12px 36px;min-width:200px;cursor:pointer}
+.btn:active{transform:translateY(3px);border-bottom-width:2px}
+.btn.alt{background:#42a5f5;border-bottom-color:#1565c0}
+.card{background:#fff8e1;color:#5d4037;border:4px solid #5d4037;border-radius:14px;padding:12px 28px;font-size:20px;line-height:1.6}
+.card b{font-size:26px}
+#pause{position:absolute;top:10px;right:10px;width:46px;height:46px;border-radius:50%;border:3px solid #fff;background:rgba(0,0,0,.35);color:#fff;font-size:20px;display:none;cursor:pointer}
+#pause.show{display:block}
+.hint{font-size:15px;opacity:.9}
+</style></head><body>
+<div id="wrap">
+<canvas id="c" width="400" height="600"></canvas>
+<button id="pause" title="Pause/Play">⏸</button>
+<div class="ov show" id="menu">
+<h1>FLAPPY<br>BIRD</h1>
+<div class="card">Skor terbaik: <b id="mbest">0</b></div>
+<button class="btn" id="bplay">▶ MAIN</button>
+<button class="btn alt" id="bsnd">🔊 Suara: ON</button>
+<div class="hint">Tap / Spasi / Klik untuk lompat</div>
+</div>
+<div class="ov" id="paused">
+<h2>⏸ PAUSE</h2>
+<button class="btn" id="bresume">▶ LANJUT</button>
+<button class="btn alt" id="bquit">🏠 MENU</button>
+</div>
+<div class="ov" id="over">
+<h2>GAME OVER</h2>
+<div class="card" id="medal"></div>
+<div class="card">Skor: <b id="osc">0</b><br>Terbaik: <b id="obest">0</b></div>
+<button class="btn" id="bagain">↻ ULANG</button>
+<button class="btn alt" id="bmenu">🏠 MENU</button>
+</div>
+</div>
+<script>
+const W=400,H=600,GY=520,GAP=150,PW=80,PH=460,SPD=2.4,cv=document.getElementById('c'),x=cv.getContext('2d');
+const $=id=>document.getElementById(id);
+const IM={};let loaded=0;const names=['bird','pipe','bg','ground'];
+names.forEach(n=>{const i=new Image();i.onload=()=>{IM[n]=i;loaded++};
+ i.onerror=()=>{if(!i.dataset.f){i.dataset.f=1;i.src='assets/'+n+'.svg'}};i.src='assets/'+n+'.png'});
+let best=+(localStorage.getItem('fb_best')||0),snd=localStorage.getItem('fb_snd')!=='0';
+$('mbest').textContent=best;$('bsnd').textContent='🔊 Suara: '+(snd?'ON':'OFF');
+let ac;function beep(f,d,t='square',v=.08,s=0){if(!snd)return;try{ac=ac||new AudioContext();const o=ac.createOscillator(),g=ac.createGain();o.type=t;o.frequency.setValueAtTime(f,ac.currentTime+s);if(s===0)o.frequency.exponentialRampToValueAtTime(f*1.8,ac.currentTime+d);g.gain.setValueAtTime(v,ac.currentTime+s);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+s+d);o.connect(g).connect(ac.destination);o.start(ac.currentTime+s);o.stop(ac.currentTime+s+d)}catch(e){}}
+let st='menu',bird,pipes,score,gx=0,bgx=0,fc=0,shake=0,parts=[];
+function reset(){bird={x:110,y:270,v:0,r:0};pipes=[];score=0;parts=[];fc=0}
+reset();
+function show(id){['menu','paused','over'].forEach(k=>$(k).classList.toggle('show',k===id));$('pause').classList.toggle('show',st==='ready'||st==='play'||st==='paused')}
+function setState(s){st=s;show(s==='menu'?'menu':s==='paused'?'paused':s==='over'?'over':null)}
+function start(){reset();setState('ready')}
+function flap(){if(st==='ready'){st='play'}if(st==='play'){bird.v=-7.2;beep(520,.12,'square',.07)}}
+function pause(){if(st==='play'||st==='ready'){pre=st;setState('paused')}else if(st==='paused'){setState(pre)}$('pause').textContent=st==='paused'?'▶':'⏸'}
+let pre='play';
+function die(){if(st==='over')return;shake=12;beep(200,.25,'sawtooth',.1);beep(110,.35,'sawtooth',.1,.15);
+ for(let i=0;i<18;i++)parts.push({x:bird.x,y:bird.y,vx:(Math.random()-.5)*6,vy:(Math.random()-.8)*6,l:30});
+ if(score>best){best=score;localStorage.setItem('fb_best',best)}
+ setTimeout(()=>{$('osc').textContent=score;$('obest').textContent=best;$('mbest').textContent=best;
+  $('medal').textContent=score>=30?'🥇 Medali Emas':score>=15?'🥈 Medali Perak':score>=5?'🥉 Medali Perunggu':'Coba lagi, pasti bisa!';
+  if(st==='over')show('over')},700);st='over';$('pause').classList.remove('show')}
+function update(){
+ fc++;
+ if(st!=='over'){gx=(gx+SPD)%96;bgx=(bgx+SPD*.25)%W}
+ if(st==='ready'){bird.y=270+Math.sin(fc/9)*8;bird.r=0;return}
+ if(st==='menu'){bird.y=270+Math.sin(fc/9)*10;return}
+ if(st!=='play'&&st!=='over')return;
+ bird.v+=.42;bird.y+=bird.v;bird.r=Math.max(-.45,Math.min(1.3,bird.v*.07));
+ if(st==='play'){
+  if(!pipes.length||pipes[pipes.length-1].x<W-210){const c=GAP/2+60+Math.random()*(GY-GAP-120);pipes.push({x:W+10,c,s:false})}
+  pipes.forEach(p=>{p.x-=SPD;if(!p.s&&p.x+PW<bird.x){p.s=true;score++;beep(880,.1,'triangle',.08);beep(1180,.12,'triangle',.08,.08)}
+   const bx=bird.x,by=bird.y,rr=15;
+   if(bx+rr>p.x+4&&bx-rr<p.x+PW-4&&(by-rr+4<p.c-GAP/2||by+rr-4>p.c+GAP/2))die()});
+  pipes=pipes.filter(p=>p.x>-PW-10);
+  if(bird.y+15>GY){bird.y=GY-15;die()}
+  if(bird.y<-30)bird.y=-30;
+ }else if(bird.y+15>GY){bird.y=GY-15;bird.v=0}
+}
+function draw(){
+ x.save();if(shake>0){x.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);shake*=.85}
+ if(IM.bg){x.drawImage(IM.bg,-bgx,0,W,H);x.drawImage(IM.bg,W-bgx,0,W,H)}else{x.fillStyle='#4fc3f7';x.fillRect(0,0,W,H)}
+ if(IM.pipe)pipes.forEach(p=>{const top=p.c-GAP/2,bot=p.c+GAP/2,bh=GY-bot;
+  x.save();x.translate(p.x,top);x.scale(1,-1);x.drawImage(IM.pipe,0,0,160,Math.min(top,PH)*2,0,0,PW,Math.min(top,PH));x.restore();
+  x.drawImage(IM.pipe,0,0,160,Math.min(bh,PH)*2,p.x,bot,PW,Math.min(bh,PH))});
+ if(IM.ground)for(let i=-1;i<W/48+1;i++)x.drawImage(IM.ground,i*48-gx/2*(48/48)+0,GY,48,80);
+ parts.forEach(q=>{q.x+=q.vx;q.y+=q.vy;q.vy+=.3;q.l--;x.globalAlpha=Math.max(0,q.l/30);x.fillStyle='#fdd835';x.fillRect(q.x,q.y,5,5)});x.globalAlpha=1;parts=parts.filter(q=>q.l>0);
+ if(IM.bird&&st!=='over'||IM.bird&&bird.y<GY){x.save();x.translate(bird.x,bird.y);x.rotate(bird.r);
+  const fl=st==='play'?Math.sin(fc/2.2)*.12:Math.sin(fc/6)*.06;x.scale(1,1+fl);x.drawImage(IM.bird,-34,-24,68,48);x.restore()}
+ if(st==='play'||st==='paused'||st==='over'){x.textAlign='center';x.font='bold 56px "Trebuchet MS",sans-serif';x.lineWidth=7;x.strokeStyle='#3e2723';x.strokeText(score,W/2,90);x.fillStyle='#fff';x.fillText(score,W/2,90)}
+ if(st==='ready'){x.textAlign='center';x.font='bold 24px "Trebuchet MS"';x.fillStyle='#fff';x.strokeStyle='#3e2723';x.lineWidth=5;x.strokeText('TAP UNTUK MULAI',W/2,200);x.fillText('TAP UNTUK MULAI',W/2,200)}
+ x.restore()}
+let last=0,acc=0;
+function loop(t){const d=Math.min(100,t-last);last=t;acc+=d;while(acc>=16.67){if(st!=='paused')update();acc-=16.67}draw();requestAnimationFrame(loop)}
+requestAnimationFrame(loop);
+$('bplay').onclick=()=>{start();beep(600,.1)};$('bagain').onclick=start;
+$('bmenu').onclick=$('bquit').onclick=()=>{reset();setState('menu')};
+$('bresume').onclick=pause;$('pause').onclick=e=>{e.stopPropagation();pause()};
+$('bsnd').onclick=()=>{snd=!snd;localStorage.setItem('fb_snd',snd?'1':'0');$('bsnd').textContent='🔊 Suara: '+(snd?'ON':'OFF')};
+$('wrap').addEventListener('pointerdown',e=>{if(e.target.closest('button,.ov.show'))return;flap()});
+addEventListener('keydown',e=>{if(e.code==='Space'||e.code==='ArrowUp'){e.preventDefault();if(st==='menu')start();else flap()}
+ if(e.code==='KeyP'||e.code==='Escape')pause()});
+</script></body></html>
